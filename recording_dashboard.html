@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SO-101 Dataset Recorder</title>
+  <style>
+    :root { color-scheme: dark; --bg:#11151b; --card:#1b222c; --line:#344150; --text:#e7edf4; --muted:#94a3b8; --cyan:#36d7e8; --orange:#ffad42; --purple:#c792ea; --red:#ff5d6c; --green:#5bd88f; --camera-panel-height:clamp(220px,min(42vh,70vw),560px); }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:13px/1.35 system-ui,"Malgun Gothic",sans-serif; }
+    header { display:flex; gap:10px; align-items:center; padding:7px 12px; background:#151b23; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+    h1 { margin:0; font-size:17px; }
+    nav { display:flex; gap:5px; }
+    nav button { padding:4px 9px; background:transparent; border-color:transparent; }
+    .badge { padding:4px 8px; border-radius:999px; font-weight:700; background:#334155; }
+    .badge.record { background:#a61b2b; }
+    .stats { display:flex; gap:9px; color:var(--muted); flex-wrap:wrap; }
+    main { display:grid; grid-template-columns:minmax(720px,1fr) 300px; gap:8px; padding:8px; }
+    .left { min-width:0; display:grid; gap:8px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    .card h2 { font-size:13px; margin:0; padding:6px 9px; border-bottom:1px solid var(--line); color:#c9d5e2; }
+    .camera-wrap { display:grid; grid-template-columns:minmax(420px,1fr) minmax(300px,320px); height:var(--camera-panel-height); min-height:220px; }
+    #camera { width:100%; height:100%; min-height:0; object-fit:contain; background:#080a0d; }
+    table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+    th,td { padding:7px 8px; border-bottom:1px solid #2a3440; text-align:right; }
+    .joint-table { align-self:start; table-layout:fixed; font-size:12px; }
+    .joint-table th,.joint-table td { padding:4px 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .joint-table th:first-child,.joint-table td:first-child { width:34%; }
+    th:first-child,td:first-child { text-align:left; }
+    th { color:var(--muted); font-size:11px; }
+    #alignmentModal th:last-child, #alignmentModal td:last-child { color:var(--red); font-weight:700; }
+    .toolbar { display:flex; gap:5px; padding:6px; flex-wrap:wrap; border-bottom:1px solid var(--line); }
+    button { border:1px solid #526174; background:#293443; color:var(--text); border-radius:6px; padding:5px 8px; font-size:12px; cursor:pointer; }
+    button:hover:not(:disabled) { border-color:var(--cyan); }
+    button:disabled { opacity:.35; cursor:not-allowed; }
+    button.danger { border-color:#8b3440; color:#ffc6cc; }
+    button.primary { background:#155e75; border-color:#28b8cc; }
+    .timeline-toolbar { align-items:center; }
+    .playback-progress { padding:4px 8px; color:#ff9aa5; background:#3a1820; border:1px solid #8b3440; border-radius:999px; font-variant-numeric:tabular-nums; font-weight:700; }
+    #followPlayhead.active { color:#ffd5da; background:#6f1f2c; border-color:var(--red); }
+    .timeline-scale { display:flex; gap:7px; align-items:center; margin-left:auto; color:var(--muted); font-size:12px; }
+    .timeline-scale select { width:auto; min-width:112px; padding:5px 8px; }
+    .timeline-help { color:var(--muted); font-size:12px; }
+    .trajectory-layout { display:grid; grid-template-columns:clamp(230px,20vw,290px) minmax(0,1fr); min-width:0; }
+    .joint-guide { min-width:0; margin:0; padding:8px; border-right:1px solid var(--line); background:#111820; }
+    .joint-guide h3 { margin:0 0 6px; color:#dce6f1; font-size:12px; }
+    .joint-guide-visual { position:relative; overflow:hidden; width:100%; aspect-ratio:4/3; border:1px solid #344150; border-radius:6px; background:#0d1117; }
+    .joint-guide-image { display:block; width:100%; height:100%; object-fit:cover; }
+    .joint-guide-marker { position:absolute; display:grid; place-items:center; width:23px; height:23px; transform:translate(-50%,-50%); border:2px solid #071016; border-radius:50%; color:#071016; background:var(--joint-color,#94a3b8); box-shadow:0 0 0 2px rgba(255,255,255,.75),0 2px 8px #000; font-size:11px; font-weight:900; }
+    .joint-guide-marker[data-joint="shoulder_pan"] { left:25%; top:68%; }
+    .joint-guide-marker[data-joint="shoulder_lift"] { left:38%; top:52%; }
+    .joint-guide-marker[data-joint="elbow_flex"] { left:42%; top:28%; }
+    .joint-guide-marker[data-joint="wrist_flex"] { left:60%; top:38%; }
+    .joint-guide-marker[data-joint="wrist_roll"] { left:67%; top:48%; }
+    .joint-guide-marker[data-joint="gripper"] { left:74%; top:32%; }
+    .joint-guide-list { display:grid; gap:3px; margin:7px 0 0; padding:0; list-style:none; }
+    .joint-guide-item { display:grid; grid-template-columns:22px minmax(0,1fr); grid-template-rows:auto auto; column-gap:6px; align-items:center; min-width:0; padding:3px 4px; border-left:3px solid var(--joint-color,#94a3b8); background:#18212b; }
+    .joint-guide-number { grid-row:1/3; display:grid; place-items:center; width:19px; height:19px; border-radius:50%; color:#071016; background:var(--joint-color,#94a3b8); font-size:10px; font-weight:900; }
+    .joint-guide-key { overflow:hidden; color:var(--joint-color,#cbd5e1); font-size:10px; text-overflow:ellipsis; }
+    .joint-guide-label { color:#b8c5d3; font-size:10px; }
+    .joint-guide-source { display:block; margin-top:6px; color:#7dd3fc; font-size:9px; text-decoration:none; }
+    .joint-guide-source:hover { text-decoration:underline; }
+    #chartScroll { min-width:0; overflow-x:auto; overflow-y:hidden; width:100%; scrollbar-color:#64748b #1d2732; }
+    #chartTrack { min-width:100%; }
+    .timeline-panel + .timeline-panel { border-top:1px solid var(--line); }
+    .timeline-heading { position:sticky; left:0; z-index:1; display:flex; align-items:center; gap:8px; width:max-content; min-width:min(100%,900px); padding:4px 8px; background:#171e27; border-bottom:1px solid #2a3542; }
+    .timeline-heading strong { min-width:58px; color:#dce6f1; }
+    .joint-legend { display:flex; gap:5px 10px; align-items:center; flex-wrap:wrap; }
+    .joint-legend-item { display:inline-flex; gap:4px; align-items:center; color:#b9c6d4; font-size:10px; white-space:nowrap; }
+    .joint-legend-swatch { width:14px; height:3px; border-radius:2px; }
+    #leaderChart, #followerChart { display:block; height:185px; }
+    aside { position:sticky; top:49px; align-self:start; display:flex; flex-direction:column; gap:8px; min-width:0; }
+    .side-tab-card { display:flex; flex-direction:column; min-height:0; }
+    .side-tabs { display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid var(--line); }
+    .side-tab { border:0; border-radius:0; padding:8px; background:transparent; }
+    .side-tab[aria-selected="true"] { color:var(--cyan); background:#173342; box-shadow:inset 0 -2px var(--cyan); font-weight:700; }
+    .side-tab:focus-visible { outline:2px solid var(--cyan); outline-offset:-2px; }
+    .log-unread { display:inline-grid; place-items:center; min-width:18px; height:18px; margin-left:4px; padding:0 5px; border-radius:999px; color:#071016; background:var(--orange); font-size:10px; font-weight:800; }
+    .log-unread[hidden] { display:none; }
+    .side-tab-panel:not([hidden]) { display:flex; flex-direction:column; height:clamp(260px,45vh,520px); min-height:0; }
+    .side-tab-panel[hidden] { display:none; }
+    #scenarioList { flex:1; min-height:0; max-height:none; overflow:auto; padding:6px; }
+    #log { flex:1; width:100%; height:auto; min-height:0; overflow:auto; overflow-wrap:anywhere; padding:7px; margin:0; white-space:pre-wrap; font:10px/1.45 Consolas,monospace; background:#0d1117; }
+    .log-note { padding:6px 8px; border-bottom:1px solid var(--line); color:var(--muted); font-size:10px; }
+    .scenario { display:block; width:100%; padding:7px; border:1px solid #354252; border-radius:7px; margin-bottom:5px; color:inherit; background:transparent; text-align:left; font:inherit; cursor:pointer; }
+    .scenario.selected { border-color:var(--cyan); background:#173342; }
+    .scenario-title,.scenario-task,.scenario-meta { display:block; }
+    .scenario-title { font-weight:700; }
+    .scenario-meta { color:var(--muted); font-size:12px; margin-top:4px; }
+    .notice { padding:10px; color:#f5d38a; font-size:12px; border-top:1px solid var(--line); }
+    #connection { margin-left:auto; color:var(--green); }
+    .modal-backdrop { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:20px; background:rgba(2,6,12,.82); }
+    .modal-backdrop.hidden { display:none; }
+    .modal { width:min(620px,100%); max-height:92vh; overflow:auto; padding:20px; background:#1b222c; border:1px solid #536276; border-radius:12px; box-shadow:0 20px 70px #000; }
+    .modal h2 { margin:0 0 8px; }
+    .modal p { color:#b9c6d4; }
+    .settings-grid { display:grid; grid-template-columns:1fr 150px; gap:10px 14px; align-items:center; margin:16px 0; }
+    input,select { width:100%; padding:7px 9px; color:var(--text); background:#10161d; border:1px solid #4b5969; border-radius:6px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+    @media(max-width:1050px){ main{grid-template-columns:1fr}.camera-wrap{grid-template-columns:1fr;height:auto;min-height:0}#camera{height:var(--camera-panel-height)}aside{position:static;order:-1}.side-tab-panel:not([hidden]){height:min(320px,42vh);min-height:220px} }
+    @media(max-width:760px){ .trajectory-layout{grid-template-columns:1fr}.joint-guide{border-right:0;border-bottom:1px solid var(--line)}.joint-guide-visual{max-width:420px;margin:0 auto}.joint-guide-list{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SO-101 Web Recorder</h1>
+    <nav><button id="fileMenu">파일</button><button id="settingsMenu">설정</button><button id="calibrationMenu">캘리브레이션</button></nav>
+    <span id="phaseBadge" class="badge">BOOT</span>
+    <div class="stats">
+      <span id="phaseDetail">Starting</span><span id="progress">0/0</span>
+      <span id="remaining">0.0 s</span><span id="hz">0.0 Hz</span><span id="frames">0 frames</span><span id="motionStatus">motion OFF</span>
+    </div>
+    <span id="connection">● localhost</span>
+  </header>
+  <main>
+    <section class="left">
+      <div class="card">
+        <h2>카메라와 현재 관절</h2>
+        <div class="camera-wrap">
+          <img id="camera" alt="front camera">
+          <table class="joint-table"><thead><tr><th>JOINT</th><th id="hFollower">FOLLOW</th><th id="hLeader">LEADER</th><th id="hCommand">CMD</th><th id="hError">ERR</th></tr></thead><tbody id="jointRows"></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2 id="chartTitle">관절 궤적</h2>
+        <div class="toolbar timeline-toolbar">
+          <button id="liveBtn">LIVE 그래프로 복귀</button>
+          <button id="resetTrace" title="화면의 LIVE 궤적만 초기화하며 저장된 episode와 시나리오는 삭제하지 않습니다.">궤적 초기화</button>
+          <span id="playbackProgress" class="playback-progress" hidden>재생 step 0 / 0</span>
+          <button id="followPlayhead" title="재생 진행선을 다시 자동으로 따라갑니다." disabled>진행선 따라가기</button>
+          <label class="timeline-scale" for="timelineZoom">x축 표시 배율
+            <select id="timelineZoom" title="타임라인 화면의 x축 간격만 변경합니다. 로봇 재생 속도는 변경하지 않습니다.">
+              <option value="0.25">압축 25%</option><option value="0.5">압축 50%</option><option value="1" selected>100%</option><option value="2">확대 200%</option>
+            </select>
+          </label>
+          <span class="timeline-help">화면만 변경 · 로봇 재생 속도는 변경하지 않음</span>
+        </div>
+        <div class="trajectory-layout">
+          <figure id="jointGuide" class="joint-guide" aria-labelledby="jointGuideTitle">
+            <h3 id="jointGuideTitle">SO-101 관절 위치와 추적 색상</h3>
+            <div class="joint-guide-visual">
+              <img class="joint-guide-image" src="/assets/so101-follower-official.webp" alt="실제 SO-101 Follower 암의 측면 모습">
+              <span class="joint-guide-marker" data-joint="shoulder_pan" aria-hidden="true">1</span>
+              <span class="joint-guide-marker" data-joint="shoulder_lift" aria-hidden="true">2</span>
+              <span class="joint-guide-marker" data-joint="elbow_flex" aria-hidden="true">3</span>
+              <span class="joint-guide-marker" data-joint="wrist_flex" aria-hidden="true">4</span>
+              <span class="joint-guide-marker" data-joint="wrist_roll" aria-hidden="true">5</span>
+              <span class="joint-guide-marker" data-joint="gripper" aria-hidden="true">6</span>
+            </div>
+            <ol class="joint-guide-list">
+              <li class="joint-guide-item" data-joint="shoulder_pan"><span class="joint-guide-number">1</span><code class="joint-guide-key">shoulder_pan</code><span class="joint-guide-label">베이스 회전</span></li>
+              <li class="joint-guide-item" data-joint="shoulder_lift"><span class="joint-guide-number">2</span><code class="joint-guide-key">shoulder_lift</code><span class="joint-guide-label">어깨 들기</span></li>
+              <li class="joint-guide-item" data-joint="elbow_flex"><span class="joint-guide-number">3</span><code class="joint-guide-key">elbow_flex</code><span class="joint-guide-label">팔꿈치 굽힘</span></li>
+              <li class="joint-guide-item" data-joint="wrist_flex"><span class="joint-guide-number">4</span><code class="joint-guide-key">wrist_flex</code><span class="joint-guide-label">손목 굽힘</span></li>
+              <li class="joint-guide-item" data-joint="wrist_roll"><span class="joint-guide-number">5</span><code class="joint-guide-key">wrist_roll</code><span class="joint-guide-label">손목 회전</span></li>
+              <li class="joint-guide-item" data-joint="gripper"><span class="joint-guide-number">6</span><code class="joint-guide-key">gripper</code><span class="joint-guide-label">그리퍼 열기/닫기</span></li>
+            </ol>
+            <a class="joint-guide-source" href="https://huggingface.co/docs/lerobot/so101" target="_blank" rel="noopener noreferrer">사진 출처: Hugging Face LeRobot SO-101 문서</a>
+          </figure>
+          <div id="chartScroll">
+            <div id="chartTrack">
+              <section class="timeline-panel" aria-labelledby="leaderTimelineTitle">
+                <div class="timeline-heading"><strong id="leaderTimelineTitle">Leader</strong><div id="leaderLegend" class="joint-legend"></div></div>
+                <canvas id="leaderChart" height="185"></canvas>
+              </section>
+              <section class="timeline-panel" aria-labelledby="followerTimelineTitle">
+                <div class="timeline-heading"><strong id="followerTimelineTitle">Follower</strong><div id="followerLegend" class="joint-legend"></div></div>
+                <canvas id="followerChart" height="185"></canvas>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <aside>
+      <div class="card">
+        <h2>녹화 제어</h2>
+        <div class="toolbar">
+          <button id="startRecord" class="primary">녹화 시작</button>
+          <button id="finishSegment">구간 완료</button>
+          <button id="discardSegment">현재 녹화 폐기</button>
+          <button id="saveEpisode" class="primary">성공본 저장</button>
+          <button id="discardEpisode">저장하지 않음</button>
+          <button id="extendTarget">목표 늘리기</button>
+          <button id="stopCollection" class="danger">프로그램 종료</button>
+        </div>
+      </div>
+      <div class="card side-tab-card">
+        <div class="side-tabs" role="tablist" aria-label="시나리오와 이벤트 로그">
+          <button id="scenarioTab" class="side-tab" role="tab" aria-controls="scenarioPanel" aria-selected="true" tabindex="0" type="button">시나리오</button>
+          <button id="logTab" class="side-tab" role="tab" aria-controls="logPanel" aria-selected="false" tabindex="-1" type="button">로그 <span id="logUnread" class="log-unread" hidden>0</span></button>
+        </div>
+        <section id="scenarioPanel" class="side-tab-panel" role="tabpanel" aria-labelledby="scenarioTab">
+          <div class="toolbar">
+            <button id="runScenario" class="primary">선택 시연 실행</button>
+            <button id="stopScenario" class="danger">실행 정지</button>
+            <button id="deleteScenario">목록에서 제거</button>
+          </div>
+          <div id="scenarioList"></div>
+          <div class="notice">실행은 학습 정책 추론이 아니라 저장된 follower 명령의 open-loop 재생입니다. 제거는 재생용 JSON만 삭제하며 LeRobot 학습 episode는 유지합니다.</div>
+        </section>
+        <section id="logPanel" class="side-tab-panel" role="tabpanel" aria-labelledby="logTab" hidden>
+          <div class="log-note">단계·명령·저장·경고처럼 변화가 생긴 이벤트만 표시합니다.</div>
+          <pre id="log" tabindex="0" aria-label="실시간 이벤트 로그"></pre>
+        </section>
+      </div>
+    </aside>
+  </main>
+  <div id="modalBackdrop" class="modal-backdrop">
+    <section id="setupModal" class="modal">
+      <h2>실행 설정과 캘리브레이션</h2>
+      <p>모터 연결 전에 값을 확정합니다. 기존 데이터셋을 이어 쓸 때 control FPS는 데이터셋 FPS와 같아야 합니다.</p>
+      <div class="settings-grid">
+        <label for="controlFps">Control / dataset FPS (5–20)</label><input id="controlFps" type="number" min="5" max="20" step="1" value="20">
+        <label for="targetEpisodes">이번 실행 저장 episode 수</label><input id="targetEpisodes" type="number" min="1" max="1000" step="1" value="200">
+        <label for="episodeSeconds">episode 최대 시간(초, 최대 300)</label><input id="episodeSeconds" type="number" min="1" max="300" step="1" value="60">
+        <label for="resetSeconds">reset 최대 시간(초)</label><input id="resetSeconds" type="number" min="0" max="600" step="1" value="20">
+        <label for="previewHz">웹 카메라 갱신 Hz (1–10)</label><input id="previewHz" type="number" min="1" max="10" step="1" value="10">
+        <label for="motionTriggered">Follower 움직임 감지 녹화</label><select id="motionTriggered"><option value="true" selected>사용(앞뒤 정지 자동 제거)</option><option value="false">사용 안 함(전체 시간 저장)</option></select>
+        <label for="motionBodyThreshold">Body 시작 속도 (deg/s)</label><input id="motionBodyThreshold" type="number" min="0.1" max="180" step="0.1" value="4">
+        <label for="motionGripperThreshold">Gripper 시작 속도 (%/s)</label><input id="motionGripperThreshold" type="number" min="0.1" max="200" step="0.1" value="5">
+        <label for="motionPreRoll">움직임 시작 전 보존 시간(초)</label><input id="motionPreRoll" type="number" min="0" max="1" step="0.1" value="0.5">
+        <label for="motionStopSeconds">정지 후 자동 완료 시간(초)</label><input id="motionStopSeconds" type="number" min="0.1" max="10" step="0.1" value="1">
+        <label for="calibrationChoice">시작 전 캘리브레이션</label>
+        <select id="calibrationChoice"><option value="none" selected>기존 calibration 사용</option><option value="leader">Leader만 다시 실행</option><option value="follower">Follower만 다시 실행</option><option value="both">Leader와 Follower 모두</option></select>
+      </div>
+      <p class="notice">움직임 감지 녹화는 시작 전 대기를 제거한 뒤 하나의 연속된 고정 FPS 구간을 저장합니다. 작업 중 긴 정지가 필요하면 자동 완료 시간을 늘리거나 기능을 끄세요. 캘리브레이션 중에는 토크가 해제됩니다.</p>
+      <div class="modal-actions"><button id="beginSetup" class="primary">설정 적용 후 시작</button></div>
+    </section>
+    <section id="runtimeSettingsModal" class="modal" hidden>
+      <h2>수집 목표 늘리기</h2>
+      <p>현재 진행: <strong id="runtimeProgress">0 / 0 episodes</strong></p>
+      <div class="settings-grid">
+        <label for="additionalEpisodes">추가 저장 시나리오(episode) 수</label><input id="additionalEpisodes" type="number" min="1" max="1000" step="1" value="5">
+      </div>
+      <p class="notice">실행 중에는 FPS·시간·움직임 감지·캘리브레이션은 바꿀 수 없지만, 수집 목표는 최대 총 1,000개까지 늘릴 수 있습니다.</p>
+      <div class="modal-actions"><button id="closeRuntimeSettings">취소</button><button id="applyEpisodeTarget" class="primary">목표에 추가</button></div>
+    </section>
+    <section id="calibrationModal" class="modal" hidden>
+      <h2 id="calibrationTitle">캘리브레이션</h2><p id="calibrationMessage"></p>
+      <table><thead><tr><th>JOINT</th><th>POS</th><th>MIN</th><th>MAX</th><th>SPAN</th></tr></thead><tbody id="calibrationRows"></tbody></table>
+      <div class="modal-actions"><button id="calibrationContinue" class="primary">중앙 자세 설정 완료</button><button id="calibrationFinish" class="primary">범위 기록 완료</button><button class="danger" onclick="command('stop_collection')">전체 종료</button></div>
+    </section>
+    <section id="alignmentModal" class="modal" hidden>
+      <h2>Leader/Follower 시작 자세 확인</h2><p id="alignmentMessage"></p>
+      <table><thead><tr><th>JOINT</th><th>FOLLOW</th><th>LEADER</th><th>HOLD</th><th>ERROR</th></tr></thead><tbody id="alignmentRows"></tbody></table>
+      <p class="notice">안전 판정 후에만 follower 토크를 활성화합니다. 작업 공간에 사람과 장애물이 없어야 합니다.</p>
+      <div class="modal-actions"><button id="alignmentRecheck">다시 측정</button><button id="alignmentConfirm" class="primary">안전 확인·모터 활성화</button><button class="danger" onclick="command('stop_collection')">취소</button></div>
+    </section>
+  </div>
+  <script>
+    const TOKEN = "__DASHBOARD_TOKEN__";
+    const $ = id => document.getElementById(id);
+    const JOINT_COLORS = Object.freeze(['#36d7e8','#ffad42','#c792ea','#5bd88f','#ff6b8a','#ffd166']);
+    const JOINT_KEYS = Object.freeze(['shoulder_pan','shoulder_lift','elbow_flex','wrist_flex','wrist_roll','gripper']);
+    const BASE_TIMELINE_STEP_PX = 3;
+    const TIMELINE_LEFT = 58;
+    const TIMELINE_HEIGHT = 185;
+    const PLAYHEAD_COLOR = '#ff3347';
+    let latestState = null, selectedScenario = null, viewingLive = true, autoFollow = true;
+    let graphData = {joint_names:[],ranges:{},steps:[],states:[],actions:[],leaders:[],label:""};
+    let lastLogSeq = 0, setupInitialized = false, scenarioRequestSeq = 0;
+    let liveTraceRevision = null, liveLastStep = null, runRequestPending = false, setupRequestPending = false;
+    let runtimeSettingsOpen = false, targetUpdatePending = false;
+    let desiredPreviewHz = 10, cameraObjectUrl = null, graphDrawTimer = null, lastGraphDraw = 0;
+    let lastPlaybackSignature = '', playheadFollow = false, activePlaybackRun = null, programmaticTimelineScroll = false, timelineZoomValue = 1;
+    let activeSideTab = 'scenario', unreadLogCount = 0, scenarioRenderSignature = null;
+
+    function jointColor(joint,index=0){
+      const key=String(joint||'').replace(/\.pos$/,''),canonical=JOINT_KEYS.indexOf(key);
+      return JOINT_COLORS[(canonical>=0?canonical:index)%JOINT_COLORS.length];
+    }
+    function syncJointGuideColors(){
+      document.querySelectorAll('.joint-guide-marker,.joint-guide-item').forEach((element,index)=>element.style.setProperty('--joint-color',jointColor(element.dataset.joint,index)));
+    }
+    function updateLogUnread(){
+      const badge=$('logUnread'),tab=$('logTab'),hasUnread=unreadLogCount>0;
+      badge.hidden=!hasUnread;badge.textContent=unreadLogCount>99?'99+':String(unreadLogCount);
+      tab.setAttribute('aria-label',hasUnread?`로그, 읽지 않은 이벤트 ${unreadLogCount}개`:'로그');
+    }
+    function activateSideTab(name,{focus=false}={}){
+      const tabs={scenario:{button:$('scenarioTab'),panel:$('scenarioPanel')},log:{button:$('logTab'),panel:$('logPanel')}};
+      if(!tabs[name])return;activeSideTab=name;
+      for(const [key,entry] of Object.entries(tabs)){const selected=key===name;entry.button.setAttribute('aria-selected',String(selected));entry.button.tabIndex=selected?0:-1;entry.panel.hidden=!selected}
+      if(name==='log'){unreadLogCount=0;updateLogUnread();requestAnimationFrame(()=>{const log=$('log');log.scrollTop=log.scrollHeight})}
+      if(focus)tabs[name].button.focus();
+    }
+
+    async function command(action, scenario_id=null, params=null){
+      try{
+        const body = {action}; if(scenario_id) body.scenario_id=scenario_id; if(params) body.params=params;
+        const response = await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json','X-Dashboard-Token':TOKEN},body:JSON.stringify(body)});
+        if(!response.ok){ let message='명령 실패'; try{message=(await response.json()).error||message}catch(_e){} alert(message); return false; }
+        return true;
+      }catch(error){ alert(`명령 전송 실패: ${error.message||error}`); return false; }
+    }
+    function setButtons(s){
+      const p=s.phase, idle=['READY','LIBRARY'].includes(p), record=p==='RECORD', review=p==='REVIEW', reset=p==='RESET', replay=p==='PLAYBACK';
+      const saved=Number(s.saved_in_run??0), target=Number(s.episode_target??0);
+      $('startRecord').disabled=!idle || target<=0 || saved>=target;
+      $('finishSegment').disabled=!(record||reset);
+      $('discardSegment').disabled=!record;
+      $('saveEpisode').disabled=!review; $('discardEpisode').disabled=!review;
+      $('runScenario').disabled=!idle||!selectedScenario||runRequestPending; $('stopScenario').disabled=!replay;
+      $('deleteScenario').disabled=!idle||!selectedScenario;
+      $('resetTrace').disabled=!idle||!viewingLive;
+      $('beginSetup').disabled=setupRequestPending;
+      const targetChangeAllowed=['READY','RECORD','REVIEW','RESET','LIBRARY'].includes(p)&&s.settings_locked;
+      $('extendTarget').disabled=!targetChangeAllowed||targetUpdatePending;
+      $('applyEpisodeTarget').disabled=targetUpdatePending;
+    }
+    function renderScenarios(items){
+      const list=$('scenarioList'); const ids=new Set(items.map(x=>x.id));
+      if(selectedScenario&&!ids.has(selectedScenario)){ selectedScenario=null; viewingLive=true; autoFollow=true; liveTraceRevision=null; liveLastStep=null; scenarioRequestSeq++; }
+      const signature=JSON.stringify([selectedScenario,items]);
+      if(signature===scenarioRenderSignature)return;
+      const focusedId=document.activeElement?.dataset?.scenarioId||null;
+      list.replaceChildren();
+      let focusTarget=null;
+      for(const item of items){
+        const button=document.createElement('button');button.type='button';button.dataset.scenarioId=item.id;button.className='scenario'+(item.id===selectedScenario?' selected':'');button.setAttribute('aria-pressed',String(item.id===selectedScenario));
+        const title=document.createElement('span'); title.className='scenario-title'; title.textContent=`Episode ${item.episode_index} · ${item.steps} steps`;
+        const task=document.createElement('span'); task.className='scenario-task'; task.textContent=item.task;
+        const meta=document.createElement('span'); meta.className='scenario-meta'; meta.textContent=`${item.duration_s.toFixed(1)} s @ ${item.fps} FPS · ${item.capture_mode||'legacy'} · ${item.created_at}`;
+        button.append(title,task,meta); button.onclick=()=>selectScenario(item.id); list.appendChild(button);if(item.id===focusedId)focusTarget=button;
+      }
+      if(!items.length){ const empty=document.createElement('div'); empty.className='notice'; empty.textContent='저장된 재생 시나리오가 없습니다.'; list.appendChild(empty); }
+      scenarioRenderSignature=signature;
+      if(focusTarget)focusTarget.focus({preventScroll:true});
+    }
+    async function selectScenario(id){
+      const requestSeq=++scenarioRequestSeq,selectingNew=String(selectedScenario)!==String(id),playingSame=latestState?.phase==='PLAYBACK'&&String(latestState.scenario_running)===String(id); selectedScenario=id; viewingLive=false; autoFollow=false;
+      updatePlaybackProgress();if(selectingNew&&!playingSame)setTimelineScrollLeft(0);
+      renderScenarios(latestState?.scenarios||[]);if(latestState)setButtons(latestState);
+      try{
+        const response=await fetch('/api/scenarios/'+encodeURIComponent(id),{cache:'no-store'});
+        if(!response.ok){let message='시나리오를 불러오지 못했습니다.';try{message=(await response.json()).error||message}catch(_e){}throw new Error(message)}
+        const data=await response.json();
+        if(requestSeq!==scenarioRequestSeq||selectedScenario!==id)return;
+        graphData={source:'scenario',scenario_id:data.id,label:`${data.id} · ${data.task}`,joint_names:data.joint_names,ranges:data.ranges,steps:data.states.map((_,i)=>i),states:data.states,actions:data.actions,leaders:data.leaders||data.actions||[],leader_source:hasTimelineRows(data.leaders)?'leader':'action'};
+        updatePlaybackProgress();
+        drawGraph();
+      }catch(error){
+        if(requestSeq!==scenarioRequestSeq)return;
+        selectedScenario=null; viewingLive=true; autoFollow=true; liveTraceRevision=null; liveLastStep=null;updatePlaybackProgress();
+        renderScenarios(latestState?.scenarios||[]); alert(error.message||error);
+      }
+    }
+    function getActivePlayhead(){
+      const state=latestState,running=state?.scenario_running;
+      if(state?.phase!=='PLAYBACK'||!running||!selectedScenario||String(running)!==String(selectedScenario)||graphData.source!=='scenario'||String(graphData.scenario_id)!==String(running))return null;
+      const rawStep=Number(state.playback_step),rawTotal=Number(state.playback_total_steps);
+      if(!Number.isInteger(rawStep)||!Number.isInteger(rawTotal)||rawStep<0||rawTotal<=0)return null;
+      const current=Math.min(rawStep,rawTotal),maxIndex=Math.max(0,(graphData.steps?.length||0)-1);
+      return {current,total:rawTotal,index:current>0&&graphData.steps?.length?Math.min(current-1,maxIndex):null};
+    }
+    function updatePlayheadFollowButton(playhead=getActivePlayhead()){
+      const button=$('followPlayhead');button.disabled=!playhead;button.classList.toggle('active',Boolean(playhead&&playheadFollow));button.setAttribute('aria-pressed',String(Boolean(playhead&&playheadFollow)));
+    }
+    function disablePlayheadFollow(){
+      if(!getActivePlayhead())return;playheadFollow=false;updatePlayheadFollowButton();
+    }
+    function setTimelineScrollLeft(value){
+      const scroll=$('chartScroll'),next=Math.max(0,Math.min(scroll.scrollWidth-scroll.clientWidth,Number(value)||0));
+      if(Math.abs(scroll.scrollLeft-next)<.5)return;programmaticTimelineScroll=true;scroll.scrollLeft=next;requestAnimationFrame(()=>{programmaticTimelineScroll=false});
+    }
+    function updatePlaybackProgress(){
+      const playhead=getActivePlayhead(),progress=$('playbackProgress');
+      const runKey=playhead?String(latestState.scenario_running):null;
+      if(runKey&&activePlaybackRun===null)playheadFollow=true;
+      if(!runKey)playheadFollow=false;
+      activePlaybackRun=runKey;
+      progress.hidden=!playhead;if(playhead)progress.textContent=`재생 step ${playhead.current} / ${playhead.total}`;
+      updatePlayheadFollowButton(playhead);
+      const signature=playhead?`${selectedScenario}:${playhead.current}:${playhead.total}`:'hidden';
+      if(signature!==lastPlaybackSignature){lastPlaybackSignature=signature;scheduleGraphDraw()}
+    }
+    function updateState(s){
+      latestState=s; $('phaseBadge').textContent=s.phase; $('phaseBadge').className='badge'+(s.is_recording?' record':'');
+      $('phaseDetail').textContent=s.phase_detail; $('progress').textContent='saved '+s.accepted_progress;
+      $('remaining').textContent=`${Number(s.remaining_s).toFixed(1)} s`; $('hz').textContent=`${Number(s.control_hz).toFixed(1)} Hz`; $('frames').textContent=`${s.buffered_frames} frames`;
+      $('motionStatus').textContent=`motion ${s.motion_status||'OFF'} · body ${Number(s.motion_body_speed_deg_s||0).toFixed(1)}°/s · grip ${Number(s.motion_gripper_speed_pct_s||0).toFixed(1)}%/s`;
+      const fillRows=(id)=>{const tbody=$(id);tbody.replaceChildren();for(const row of s.joint_rows){const tr=document.createElement('tr');for(const key of ['joint','follower','leader','command','error']){const td=document.createElement('td');td.textContent=key==='joint'?row[key]:Number(row[key]).toFixed(1);tr.appendChild(td)}tbody.appendChild(tr)}};
+      const calibration=s.phase==='CALIBRATION', playback=s.phase==='PLAYBACK'; $('hFollower').textContent=calibration?'POS':'FOLLOW'; $('hLeader').textContent=calibration?'MIN':(playback?'TARGET':'LEADER'); $('hCommand').textContent=calibration?'MAX':'CMD'; $('hError').textContent=calibration?'SPAN':'ERR';
+      fillRows('jointRows');fillRows('calibrationRows');fillRows('alignmentRows');
+      desiredPreviewHz=Math.max(1,Math.min(10,Number(s.active_settings?.preview_hz??s.setup_defaults?.preview_hz??10)));
+      $('runtimeProgress').textContent=`${s.saved_in_run??0} / ${s.episode_target??0} episodes`;
+      if(playback)runRequestPending=false;
+      renderScenarios(s.scenarios); updatePlaybackProgress(); setButtons(s);
+      const newestLogSeq=s.logs.at(-1)?.seq||0;
+      if(newestLogSeq!==lastLogSeq){
+        const log=$('log'),atBottom=log.scrollTop+log.clientHeight>=log.scrollHeight-12;
+        const newLogCount=s.logs.filter(entry=>Number(entry.seq)>lastLogSeq).length;
+        log.textContent=s.logs.map(x=>`[${x.time}] ${x.level.toUpperCase().padEnd(5)} ${x.message}`).join('\n');
+        if(atBottom||activeSideTab!=='log')log.scrollTop=log.scrollHeight;
+        if(activeSideTab!=='log')unreadLogCount+=newLogCount;
+        lastLogSeq=newestLogSeq;
+        updateLogUnread();
+      }
+      updateModal(s);
+    }
+    function updateModal(s){
+      const backdrop=$('modalBackdrop'), setup=$('setupModal'), runtime=$('runtimeSettingsModal'), calibration=$('calibrationModal'), alignment=$('alignmentModal');
+      setup.hidden=true; runtime.hidden=true; calibration.hidden=true; alignment.hidden=true;
+      if(s.phase==='BOOT'&&!s.settings_locked){
+        backdrop.classList.remove('hidden'); setup.hidden=false;
+        if(!setupInitialized&&s.setup_defaults){
+          $('controlFps').value=s.setup_defaults.control_fps??20; $('targetEpisodes').value=s.setup_defaults.episodes??200;
+          $('episodeSeconds').value=s.setup_defaults.episode_seconds??60; $('resetSeconds').value=s.setup_defaults.reset_seconds??20; $('previewHz').value=s.setup_defaults.preview_hz??10;
+          $('motionTriggered').value=String(s.setup_defaults.motion_triggered??true); $('motionBodyThreshold').value=s.setup_defaults.motion_body_threshold_deg_s??4; $('motionGripperThreshold').value=s.setup_defaults.motion_gripper_threshold_pct_s??5;
+          $('motionPreRoll').value=s.setup_defaults.motion_pre_roll_s??0.5; $('motionStopSeconds').value=s.setup_defaults.motion_stop_seconds??1; setupInitialized=true;
+        }
+      }else if(s.phase==='CALIBRATION'){
+        backdrop.classList.remove('hidden'); calibration.hidden=false; $('calibrationTitle').textContent=`${s.calibration_target||''} 캘리브레이션`; $('calibrationMessage').textContent=s.calibration_message||s.phase_detail;
+        $('calibrationContinue').hidden=s.calibration_stage!=='center'; $('calibrationFinish').hidden=s.calibration_stage!=='range';
+      }else if(s.phase==='ALIGNMENT'){
+        backdrop.classList.remove('hidden'); alignment.hidden=false; $('alignmentMessage').textContent=s.phase_detail; $('alignmentConfirm').disabled=!s.alignment_safe;
+      }else if(runtimeSettingsOpen&&['READY','RECORD','REVIEW','RESET','LIBRARY'].includes(s.phase)){
+        backdrop.classList.remove('hidden'); runtime.hidden=false;
+      }else{runtimeSettingsOpen=false;backdrop.classList.add('hidden')}
+    }
+    function applyLiveTrace(data){
+      const fields=['steps','states','actions','leaders'];
+      if(data.replace||data.revision!==liveTraceRevision){
+        graphData={source:data.source,label:data.label,joint_names:data.joint_names,ranges:data.ranges,steps:data.steps,states:data.states,actions:data.actions,leaders:data.leaders};
+      }else{
+        graphData.source=data.source;graphData.label=data.label;graphData.joint_names=data.joint_names;graphData.ranges=data.ranges;
+        for(const field of fields)graphData[field].push(...data[field]);
+        const excess=Math.max(0,graphData.steps.length-(data.max_steps||5000));
+        if(excess)for(const field of fields)graphData[field].splice(0,excess);
+      }
+      liveTraceRevision=data.revision; liveLastStep=graphData.steps.length?graphData.steps.at(-1):null;
+      scheduleGraphDraw();
+    }
+    async function poll(){
+      try{
+        const traceUrl=liveTraceRevision===null?'/api/trace':`/api/trace?revision=${liveTraceRevision}&after=${liveLastStep??-1}`;
+        const [stateResponse,traceResponse]=await Promise.all([fetch('/api/state',{cache:'no-store'}), viewingLive?fetch(traceUrl,{cache:'no-store'}):Promise.resolve(null)]);
+        if(!stateResponse.ok) throw new Error('state'); updateState(await stateResponse.json());
+        if(traceResponse?.ok&&viewingLive)applyLiveTrace(await traceResponse.json());
+        $('connection').textContent='● localhost'; $('connection').style.color='var(--green)';
+      }catch(_e){ $('connection').textContent='● disconnected'; $('connection').style.color='var(--red)'; }
+      setTimeout(poll,250);
+    }
+    async function pollCamera(){
+      const started=performance.now();
+      try{
+        const response=await fetch(`/camera.jpg?t=${Date.now()}`,{cache:'no-store'});
+        if(response.status===200){
+          const url=URL.createObjectURL(await response.blob()), image=$('camera'), previous=cameraObjectUrl;
+          await new Promise(resolve=>{image.onload=resolve;image.onerror=resolve;image.src=url});
+          cameraObjectUrl=url;if(previous)URL.revokeObjectURL(previous);
+        }
+      }catch(_error){}
+      const period=1000/desiredPreviewHz;
+      setTimeout(pollCamera,Math.max(20,period-(performance.now()-started)));
+    }
+    function scheduleGraphDraw(){
+      if(graphDrawTimer!==null)return;
+      const delay=Math.max(0,400-(performance.now()-lastGraphDraw));
+      graphDrawTimer=setTimeout(()=>{graphDrawTimer=null;requestAnimationFrame(()=>{drawGraph();lastGraphDraw=performance.now()})},delay);
+    }
+    function hasTimelineRows(rows){
+      return Array.isArray(rows)&&rows.some(row=>Array.isArray(row)&&row.some(value=>Number.isFinite(Number(value))));
+    }
+    function renderJointLegends(){
+      const names=graphData.joint_names||[];
+      for(const legendId of ['leaderLegend','followerLegend']){
+        const legend=$(legendId); legend.replaceChildren();
+        names.forEach((joint,index)=>{
+          const range=graphData.ranges?.[joint]||{};
+          const item=document.createElement('span'); item.className='joint-legend-item';
+          item.title=`${joint}: ${range.min??'?'} ~ ${range.max??'?'} ${range.unit||''}`;
+          const swatch=document.createElement('span'); swatch.className='joint-legend-swatch'; swatch.style.background=jointColor(joint,index);
+          const label=document.createElement('span'); label.textContent=joint.replace(/\.pos$/,'');
+          item.append(swatch,label); legend.appendChild(item);
+        });
+      }
+    }
+    function drawPlayhead(ctx,index,{left,top,plotHeight,stepPx}){
+      if(index===null)return;
+      const x=left+index*stepPx;ctx.save();ctx.fillStyle=PLAYHEAD_COLOR;ctx.shadowColor='rgba(255,51,71,.45)';ctx.shadowBlur=5;ctx.fillRect(x-1.5,top,3,plotHeight);ctx.shadowBlur=0;ctx.beginPath();ctx.moveTo(x-5,top);ctx.lineTo(x+5,top);ctx.lineTo(x,top+7);ctx.closePath();ctx.fill();ctx.restore();
+    }
+    function drawTimeline(canvas,rows,{cssWidth,steps,stepPx,playheadIndex}){
+      const cssHeight=TIMELINE_HEIGHT,top=10,left=TIMELINE_LEFT,right=28,bottom=24,plotHeight=cssHeight-top-bottom;
+      const dpr=cssWidth>6000?1:Math.min(window.devicePixelRatio||1,2),pixelWidth=Math.max(1,Math.floor(cssWidth*dpr)),pixelHeight=Math.floor(cssHeight*dpr);
+      canvas.style.width=cssWidth+'px';canvas.style.height=cssHeight+'px';if(canvas.width!==pixelWidth)canvas.width=pixelWidth;if(canvas.height!==pixelHeight)canvas.height=pixelHeight;
+      const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#131a22';ctx.fillRect(0,0,cssWidth,cssHeight);ctx.font='11px system-ui';
+      for(let grid=0;grid<=4;grid++){
+        const y=top+plotHeight*grid/4;ctx.strokeStyle=grid===0||grid===4?'#435164':'#26313d';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(cssWidth-right,y);ctx.stroke();
+        ctx.fillStyle='#94a3b8';ctx.textAlign='right';ctx.fillText(`${100-grid*25}%`,left-7,y+4);
+      }
+      ctx.strokeStyle='#435164';ctx.strokeRect(left,top,cssWidth-left-right,plotHeight);
+      const xLabelEvery=Math.max(1,Math.ceil(100/stepPx));ctx.textAlign='center';
+      for(let index=xLabelEvery;index<steps.length-1;index+=xLabelEvery){
+        const x=left+index*stepPx;ctx.strokeStyle='#202a35';ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,top+plotHeight);ctx.stroke();ctx.fillStyle='#94a3b8';ctx.fillText(String(steps[index]),x,cssHeight-9);
+      }
+      (graphData.joint_names||[]).forEach((joint,jointIndex)=>{
+        const range=graphData.ranges?.[joint]||{min:-180,max:180},min=Number(range.min),max=Number(range.max),span=Math.max(1e-6,max-min),markers=[];
+        ctx.save();ctx.beginPath();ctx.rect(left,top,Math.max(0,cssWidth-left-right),plotHeight);ctx.clip();ctx.strokeStyle=jointColor(joint,jointIndex);ctx.lineWidth=1.7;ctx.setLineDash([]);ctx.beginPath();let started=false;
+        rows.forEach((row,index)=>{
+          if(!Array.isArray(row)||row.length<=jointIndex||!Number.isFinite(Number(row[jointIndex]))){started=false;return}
+          const value=Number(row[jointIndex]),x=left+index*stepPx,normalized=(value-min)/span,unclampedY=top+(1-normalized)*plotHeight,y=Math.max(top,Math.min(top+plotHeight,unclampedY));
+          if(started)ctx.lineTo(x,y);else{ctx.moveTo(x,y);started=true}if(value<min||value>max)markers.push([x,y]);
+        });
+        ctx.stroke();ctx.restore();ctx.fillStyle='#ff5d6c';for(const [x,y] of markers)ctx.fillRect(x-2,y-2,4,4);
+      });
+      if(!hasTimelineRows(rows)){ctx.fillStyle='#64748b';ctx.textAlign='center';ctx.fillText('표시할 데이터가 없습니다.',left+(cssWidth-left-right)/2,top+plotHeight/2)}
+      drawPlayhead(ctx,playheadIndex,{left,top,plotHeight,stepPx});
+      if(steps.length){
+        const firstX=left,lastX=left+Math.max(0,steps.length-1)*stepPx;ctx.fillStyle='#94a3b8';ctx.textAlign='left';ctx.fillText(`step ${steps[0]}`,firstX,cssHeight-9);ctx.textAlign='right';ctx.fillText(`step ${steps.at(-1)}`,Math.min(cssWidth-right,lastX),cssHeight-9);
+      }
+    }
+    function ensurePlayheadVisible(playhead,{left,stepPx}){
+      if(!playhead||playhead.index===null)return;
+      const scroll=$('chartScroll'),x=left+playhead.index*stepPx,margin=Math.min(80,Math.max(24,scroll.clientWidth*.12)),visibleLeft=scroll.scrollLeft+margin,visibleRight=scroll.scrollLeft+scroll.clientWidth-margin;
+      if(x<visibleLeft)setTimelineScrollLeft(x-margin);else if(x>visibleRight)setTimelineScrollLeft(x-scroll.clientWidth+margin);
+    }
+    function drawGraph({skipTimelineScroll=false}={}){
+      const scroll=$('chartScroll'),track=$('chartTrack'),steps=graphData.steps||[],stepPx=BASE_TIMELINE_STEP_PX*timelineZoomValue;
+      const left=TIMELINE_LEFT,right=28,neededWidth=left+right+Math.max(1,steps.length-1)*stepPx,cssWidth=Math.max(scroll.clientWidth,Math.ceil(neededWidth/600)*600),playhead=getActivePlayhead();
+      track.style.width=cssWidth+'px';renderJointLegends();
+      const observedLeader=graphData.leader_source!=='action'&&hasTimelineRows(graphData.leaders),leaderRows=hasTimelineRows(graphData.leaders)?graphData.leaders:(graphData.actions||[]);
+      $('leaderTimelineTitle').textContent=observedLeader?'Leader':'Leader 명령 / 재생 target';$('followerTimelineTitle').textContent=graphData.source==='scenario'?'Follower (recorded)':'Follower';
+      const options={cssWidth,steps,stepPx,playheadIndex:playhead?.index??null};drawTimeline($('leaderChart'),leaderRows,options);drawTimeline($('followerChart'),graphData.states||[],options);
+      $('chartTitle').textContent='관절 궤적 · '+(graphData.label||'live');if(!skipTimelineScroll&&autoFollow)setTimelineScrollLeft(scroll.scrollWidth);if(!skipTimelineScroll&&playheadFollow)ensurePlayheadVisible(playhead,{left,stepPx});
+    }
+    $('chartScroll').addEventListener('scroll',()=>{const e=$('chartScroll');if(!programmaticTimelineScroll)disablePlayheadFollow();if(e.scrollLeft+e.clientWidth<e.scrollWidth-20)autoFollow=false});
+    $('chartScroll').addEventListener('wheel',disablePlayheadFollow,{passive:true});
+    $('chartScroll').addEventListener('pointerdown',disablePlayheadFollow);
+    $('chartScroll').addEventListener('touchstart',disablePlayheadFollow,{passive:true});
+    $('timelineZoom').addEventListener('change',()=>{
+      const scroll=$('chartScroll'),oldStepPx=BASE_TIMELINE_STEP_PX*timelineZoomValue,newZoom=Number($('timelineZoom').value)||1,maxIndex=Math.max(0,(graphData.steps?.length||1)-1);
+      const sourceStep=Math.max(0,Math.min(maxIndex,(scroll.scrollLeft+scroll.clientWidth/2-TIMELINE_LEFT)/oldStepPx));timelineZoomValue=newZoom;drawGraph({skipTimelineScroll:true});
+      const newStepPx=BASE_TIMELINE_STEP_PX*timelineZoomValue;setTimelineScrollLeft(TIMELINE_LEFT+sourceStep*newStepPx-scroll.clientWidth/2);if(playheadFollow)ensurePlayheadVisible(getActivePlayhead(),{left:TIMELINE_LEFT,stepPx:newStepPx});
+    });
+    $('followPlayhead').onclick=()=>{if(!getActivePlayhead())return;playheadFollow=true;updatePlayheadFollowButton();drawGraph()};
+    function activateLiveView({clear=false,label='LIVE'}={}){
+      scenarioRequestSeq++;viewingLive=true;autoFollow=true;selectedScenario=null;liveTraceRevision=null;liveLastStep=null;playheadFollow=false;
+      if(clear){graphData={source:'live',label,joint_names:graphData.joint_names||[],ranges:latestState?.ranges||graphData.ranges||{},steps:[],states:[],actions:[],leaders:[]};setTimelineScrollLeft(0);drawGraph()}
+      renderScenarios(latestState?.scenarios||[]);updatePlaybackProgress();if(latestState)setButtons(latestState);
+    }
+    $('liveBtn').onclick=()=>activateLiveView();
+    $('resetTrace').onclick=async()=>{if(await command('reset_trace'))activateLiveView({clear:true,label:'LIVE · 초기화됨'})};
+    $('startRecord').onclick=async()=>{if(await command('start_record'))activateLiveView({clear:true,label:'RECORD · 시작 대기'})}; $('finishSegment').onclick=()=>command('finish_segment'); $('discardSegment').onclick=()=>command('discard_segment');
+    $('saveEpisode').onclick=()=>command('save_episode'); $('discardEpisode').onclick=()=>command('discard_episode');
+    $('stopCollection').onclick=()=>{if(confirm('미저장 녹화를 폐기하고 모터 연결을 해제한 뒤 프로그램을 종료할까요?'))command('stop_collection')};
+    $('runScenario').onclick=async()=>{if(!selectedScenario||runRequestPending||!confirm('작업공간을 비우고 follower가 첫 자세 근처인지 확인했습니까?\n저장된 명령 궤적을 실제 암에서 재생합니다.'))return;runRequestPending=true;if(latestState)setButtons(latestState);if(!await command('run_scenario',selectedScenario))runRequestPending=false;else setTimeout(()=>{if(latestState?.phase!=='PLAYBACK'){runRequestPending=false;if(latestState)setButtons(latestState)}},2000)};
+    $('stopScenario').onclick=()=>command('stop_scenario');
+    $('deleteScenario').onclick=()=>{if(selectedScenario&&confirm('재생용 시나리오 JSON을 목록에서 제거합니다.\nLeRobot 학습 episode는 유지됩니다.'))command('delete_scenario',selectedScenario)};
+    $('beginSetup').onclick=async()=>{
+      const params={control_fps:Number($('controlFps').value),episodes:Number($('targetEpisodes').value),episode_seconds:Number($('episodeSeconds').value),reset_seconds:Number($('resetSeconds').value),preview_hz:Number($('previewHz').value),motion_triggered:$('motionTriggered').value==='true',motion_body_threshold_deg_s:Number($('motionBodyThreshold').value),motion_gripper_threshold_pct_s:Number($('motionGripperThreshold').value),motion_pre_roll_s:Number($('motionPreRoll').value),motion_stop_seconds:Number($('motionStopSeconds').value),calibration:$('calibrationChoice').value};
+      const numeric=[params.control_fps,params.episodes,params.episode_seconds,params.reset_seconds,params.preview_hz,params.motion_body_threshold_deg_s,params.motion_gripper_threshold_pct_s,params.motion_pre_roll_s,params.motion_stop_seconds];
+      if(numeric.some(value=>!Number.isFinite(value))||!Number.isInteger(params.control_fps)||params.control_fps<5||params.control_fps>20||!Number.isInteger(params.episodes)||params.episodes<1||params.episodes>1000||params.episode_seconds<=0||params.episode_seconds>300||params.reset_seconds<0||params.reset_seconds>600||params.preview_hz<1||params.preview_hz>10||params.preview_hz>params.control_fps||params.motion_body_threshold_deg_s<0.1||params.motion_body_threshold_deg_s>180||params.motion_gripper_threshold_pct_s<0.1||params.motion_gripper_threshold_pct_s>200||params.motion_pre_roll_s<0||params.motion_pre_roll_s>1||params.motion_stop_seconds<0.1||params.motion_stop_seconds>10){alert('설정 값의 범위를 확인하세요.');return;}
+      if(!confirm('Follower 작업 공간을 비우고 두 암을 손으로 지지할 준비가 되었습니까?\n선택한 경우 다음 단계에서 토크가 해제되고 calibration이 시작됩니다.'))return;
+      setupRequestPending=true;if(latestState)setButtons(latestState);if(!await command('start_setup',null,params))setupRequestPending=false;else setTimeout(()=>{if(!latestState?.settings_locked){setupRequestPending=false;if(latestState)setButtons(latestState)}},1200);
+    };
+    $('calibrationContinue').onclick=()=>command('calibration_continue'); $('calibrationFinish').onclick=()=>command('calibration_finish');
+    $('alignmentConfirm').onclick=()=>command('confirm_alignment'); $('alignmentRecheck').onclick=()=>command('recheck_alignment');
+    const openRuntimeSettings=()=>{if(!latestState?.settings_locked){$('modalBackdrop').classList.remove('hidden');return}if(!['READY','RECORD','REVIEW','RESET','LIBRARY'].includes(latestState.phase)){alert('현재 단계가 끝난 뒤 수집 목표를 변경하세요.');return}runtimeSettingsOpen=true;updateModal(latestState);$('additionalEpisodes').focus()};
+    $('extendTarget').onclick=openRuntimeSettings;
+    $('closeRuntimeSettings').onclick=()=>{runtimeSettingsOpen=false;if(latestState)updateModal(latestState)};
+    $('applyEpisodeTarget').onclick=async()=>{const additional=Number($('additionalEpisodes').value),current=Number(latestState?.episode_target??0);if(!Number.isInteger(additional)||additional<1||additional>1000||current+additional>1000){alert('추가 개수는 1 이상의 정수이고, 총 목표는 1,000개 이하여야 합니다.');return}targetUpdatePending=true;if(latestState)setButtons(latestState);const ok=await command('increase_episode_target',null,{additional_episodes:additional});targetUpdatePending=false;if(ok)runtimeSettingsOpen=false;if(latestState){setButtons(latestState);updateModal(latestState)}};
+    $('settingsMenu').onclick=openRuntimeSettings;
+    $('calibrationMenu').onclick=()=>{if(latestState?.settings_locked)alert('캘리브레이션은 포트 독점과 토크 해제가 필요합니다. 프로그램 종료 후 다시 실행하세요.');else{$('calibrationChoice').focus();$('modalBackdrop').classList.remove('hidden')}};
+    $('fileMenu').onclick=()=>{if(confirm('현재 미저장 녹화를 폐기하고 프로그램을 종료할까요?'))command('stop_collection')};
+    $('scenarioTab').onclick=()=>activateSideTab('scenario');
+    $('logTab').onclick=()=>activateSideTab('log');
+    const sideTabOrder=['scenario','log'];
+    sideTabOrder.forEach((name,index)=>$(name+'Tab').addEventListener('keydown',event=>{
+      let nextIndex=null;
+      if(event.key==='ArrowLeft')nextIndex=(index-1+sideTabOrder.length)%sideTabOrder.length;
+      else if(event.key==='ArrowRight')nextIndex=(index+1)%sideTabOrder.length;
+      else if(event.key==='Home')nextIndex=0;
+      else if(event.key==='End')nextIndex=sideTabOrder.length-1;
+      if(nextIndex!==null){event.preventDefault();activateSideTab(sideTabOrder[nextIndex],{focus:true})}
+    }));
+    syncJointGuideColors();
+    updateLogUnread();
+    activateSideTab('scenario');
+    window.addEventListener('resize',drawGraph); poll(); pollCamera();
+  </script>
+</body>
+</html>

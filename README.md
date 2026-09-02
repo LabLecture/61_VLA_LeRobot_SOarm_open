@@ -105,6 +105,8 @@ python .\run_teleoperate.py
 
 ## 녹화 GUI 실행
 
+가상환경을 활성화한 PowerShell에서 저장소 루트(`README.md`와 `run_record.py`가 있는 폴더)로 이동한 뒤 다음 명령을 그대로 복사해 실행합니다.
+
 ```powershell
 python .\run_record.py `
     --task "물체를 집어 목표 위치에 놓기" `
@@ -112,7 +114,23 @@ python .\run_record.py `
     --root .\datasets\so101_dataset
 ```
 
-기본 브라우저에서 `http://127.0.0.1:8765`가 열립니다. 서버는 localhost에만 바인딩되며 명령 요청에는 실행마다 새로 만든 token을 사용합니다. 브라우저를 자동으로 열지 않으려면 `--no-browser`, 포트를 바꾸려면 `--dashboard-port`를 사용합니다.
+기본 브라우저에서 `http://127.0.0.1:8765`가 열립니다. 서버는 localhost에만 바인딩되며 명령 요청에는 실행마다 새로 만든 token을 사용합니다. 브라우저를 자동으로 열지 않으려면 `--no-browser`를 사용합니다.
+
+이미 전체판 GUI가 8765 포트를 사용 중이고, 종료하지 않은 상태에서 공개판 화면만 별도로 확인하려면 공개판 저장소 루트에서 다음 명령을 실행합니다.
+
+```powershell
+python .\run_record.py `
+    --task "물체를 집어 목표 위치에 놓기" `
+    --repo-id local/so101_dataset `
+    --root .\datasets\so101_dataset `
+    --dashboard-port 8766
+```
+
+이때 공개판의 정확한 접속 주소는 `http://127.0.0.1:8766`입니다. 공개판의 정상 화면 오른쪽에는 `시나리오 | 로그` 탭만 표시됩니다. Agent 또는 Train 탭이 보인다면 공개판 코드가 아니라 8765에서 이미 실행 중이던 전체판 서버를 보고 있는 것입니다.
+
+전체판을 종료하고 공개판만 실행하려면 전체판 GUI의 `프로그램 종료`를 누르거나 전체판을 실행한 터미널에서 `Ctrl+C`를 누른 뒤, 모터 disconnect가 끝날 때까지 기다렸다가 공개판 명령을 다시 실행합니다. Follower 토크 해제가 누락될 수 있으므로 `taskkill` 같은 강제 종료는 피하십시오.
+
+두 서버의 웹 화면 자체는 서로 다른 포트로 동시에 확인할 수 있지만, 두 프로그램에서 COM3/COM5 또는 카메라 연결을 동시에 시작하면 안 됩니다. 실제 하드웨어는 한 프로그램만 연결해야 하며, 다른 프로그램에서는 연결 시작 버튼을 누르지 마십시오.
 
 기존 dataset root에 episode를 이어서 저장할 때는 같은 `--repo-id`, `--root`, `--task`와 함께 `--resume`을 추가합니다. `--resume` 없이 이미 존재하는 root를 지정하면 기존 데이터를 덮어쓰지 않고 실행을 거부합니다.
 
